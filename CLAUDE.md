@@ -51,8 +51,13 @@ export TELEGRAM_BOT_TOKEN=...      # required: startup fails validation without 
 ./mvnw clean package               # build (runs tests)
 ./mvnw -DskipTests package         # build without tests
 ./mvnw test -Dtest=ReelsProjectApplicationTests#contextLoads  # single test
+
+# Docker (image = JRE 25 + yt-dlp + ffmpeg + Deno), run from deploy/
+cp .env.example .env               # put TELEGRAM_BOT_TOKEN into deploy/.env
+docker compose up --build          # build and run the bot
+docker compose build --no-cache    # update yt-dlp (unpinned, installed at image build)
 ```
-No linter or formatter is configured.
+No linter or formatter is configured. Running without Docker requires `yt-dlp`, `ffmpeg` and `deno` on `PATH` (or `DOWNLOADER_YT_DLP_PATH`).
 
 ## Current Implementation
 Implemented so far: link → download → send → cleanup. Not yet: `/start`, URL whitelist, duration/size limits, specific error messages, chat action, concurrency, cache.
