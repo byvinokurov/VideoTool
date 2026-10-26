@@ -1,7 +1,11 @@
-package ru.telegramproject.reels.download;
+package ru.telegramproject.reels.downloader;
 
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import ru.telegramproject.reels.config.DownloaderProperties;
+import ru.telegramproject.reels.downloader.dto.DownloadedVideo;
+import ru.telegramproject.reels.exception.DownloadException;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -14,6 +18,7 @@ import java.util.concurrent.TimeUnit;
 import static java.util.function.Predicate.not;
 
 @Component
+@RequiredArgsConstructor
 public class YtDlpDownloader {
 
     private static final String OUTPUT_TEMPLATE = "video.%(ext)s";
@@ -22,9 +27,9 @@ public class YtDlpDownloader {
     private final DownloaderProperties properties;
     private final JsonMapper jsonMapper;
 
-    public YtDlpDownloader(DownloaderProperties properties, JsonMapper jsonMapper) {
-        this.properties = properties;
-        this.jsonMapper = jsonMapper;
+    @PostConstruct
+    void createWorkDir() throws IOException {
+        Files.createDirectories(properties.workDir());
     }
 
     public DownloadedVideo download(String url) {
@@ -45,7 +50,6 @@ public class YtDlpDownloader {
 
     private Path createDownloadDirectory() {
         try {
-            Files.createDirectories(properties.workDir());
             return Files.createTempDirectory(properties.workDir(), "download-");
         } catch (IOException e) {
             throw new DownloadException("Failed to create download directory in " + properties.workDir(), e);

@@ -1,5 +1,6 @@
 package ru.telegramproject.reels.bot;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.longpolling.util.DefaultLongPollingUpdateConsumer;
@@ -10,7 +11,8 @@ import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
-import ru.telegramproject.reels.download.DownloadException;
+import ru.telegramproject.reels.exception.DownloadException;
+import ru.telegramproject.reels.service.VideoDeliveryService;
 
 import java.util.List;
 import java.util.Objects;
@@ -18,6 +20,7 @@ import java.util.Optional;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class ReelsBot extends DefaultLongPollingUpdateConsumer {
 
     private static final String SEND_LINK_REPLY = "Пришлите ссылку на видео из YouTube, TikTok, Instagram или VK.";
@@ -25,11 +28,6 @@ public class ReelsBot extends DefaultLongPollingUpdateConsumer {
 
     private final TelegramClient telegramClient;
     private final VideoDeliveryService videoDeliveryService;
-
-    public ReelsBot(TelegramClient telegramClient, VideoDeliveryService videoDeliveryService) {
-        this.telegramClient = telegramClient;
-        this.videoDeliveryService = videoDeliveryService;
-    }
 
     @Override
     public void consume(Update update) {
@@ -55,12 +53,18 @@ public class ReelsBot extends DefaultLongPollingUpdateConsumer {
     private static Optional<String> findLink(Message message) {
         List<MessageEntity> entities = Objects.requireNonNullElse(message.getEntities(), List.of());
         return entities.stream()
-                .filter(entity -> EntityType.URL.equals(entity.getType()) || EntityType.TEXTLINK.equals(entity.getType()))
+                .map(ReelsBot::linkOf)
+                .flatMap(Optional::stream)
                 .findFirst()
-                .map(entity -> EntityType.TEXTLINK.equals(entity.getType())
-                        ? entity.getUrl()
-                        : message.getText().substring(entity.getOffset(), entity.getOffset() + entity.getLength()))
                 .map(ReelsBot::withScheme);
+    }
+
+    private static Optional<String> linkOf(MessageEntity entity) {
+        return switch (entity.getType()) {
+            case EntityType.URL -> Optional.of(entity.getText());
+            case EntityType.TEXTLINK -> Optional.of(entity.getUrl());
+            default -> Optional.empty();
+        };
     }
 
     private static String withScheme(String link) {

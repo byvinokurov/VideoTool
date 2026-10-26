@@ -1,4 +1,4 @@
-package ru.telegramproject.reels.bot;
+package ru.telegramproject.reels.service;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -6,8 +6,8 @@ import org.telegram.telegrambots.meta.api.methods.send.SendVideo;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
-import ru.telegramproject.reels.download.DownloadedVideo;
-import ru.telegramproject.reels.download.YtDlpDownloader;
+import ru.telegramproject.reels.downloader.dto.DownloadedVideo;
+import ru.telegramproject.reels.downloader.YtDlpDownloader;
 
 import java.util.concurrent.TimeUnit;
 

@@ -1,4 +1,4 @@
-package ru.telegramproject.reels.download;
+package ru.telegramproject.reels.downloader.dto;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.util.FileSystemUtils;
@@ -22,7 +22,7 @@ public record DownloadedVideo(
         deleteDirectory(directory);
     }
 
-    static void deleteDirectory(Path directory) {
+    public static void deleteDirectory(Path directory) {
         try {
             FileSystemUtils.deleteRecursively(directory);
         } catch (IOException e) {

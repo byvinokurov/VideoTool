@@ -52,8 +52,7 @@ export TELEGRAM_BOT_TOKEN=...      # required: startup fails validation without 
 ./mvnw -DskipTests package         # build without tests
 ./mvnw test -Dtest=ReelsProjectApplicationTests#contextLoads  # single test
 
-# Docker (image = JRE 25 + yt-dlp + ffmpeg + Deno), run from deploy/
-cp .env.example .env               # put TELEGRAM_BOT_TOKEN into deploy/.env
+# Docker (image = JRE 25 + yt-dlp + ffmpeg + Deno), run from deploy/ with TELEGRAM_BOT_TOKEN exported
 docker compose up --build          # build and run the bot
 docker compose build --no-cache    # update yt-dlp (unpinned, installed at image build)
 ```

@@ -1,4 +1,4 @@
-package ru.telegramproject.reels.download;
+package ru.telegramproject.reels.exception;
 
 public class DownloadException extends RuntimeException {
 
