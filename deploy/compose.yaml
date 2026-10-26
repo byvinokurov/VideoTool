@@ -1,0 +1,12 @@
+name: reels-bot
+
+services:
+  bot:
+    build:
+      context: ..
+    image: reels-bot
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?export TELEGRAM_BOT_TOKEN in the terminal, see README.md}
+    # init забирает завершившиеся дочерние процессы yt-dlp/ffmpeg (Java в роли PID 1 этого не делает)
+    init: true
+    restart: unless-stopped

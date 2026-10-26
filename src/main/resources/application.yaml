@@ -15,6 +15,12 @@ telegram:
     # Токен берётся из переменной окружения
     token: ${TELEGRAM_BOT_TOKEN}
 
+downloader:
+  yt-dlp-path: yt-dlp
+  work-dir: ${java.io.tmpdir}/reels-bot
+  timeout: 2m
+  max-height: 720
+
 logging:
   level:
     ru.telegramproject.reels: INFO
