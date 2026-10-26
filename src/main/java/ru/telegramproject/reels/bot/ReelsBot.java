@@ -38,7 +38,7 @@ public class ReelsBot extends DefaultLongPollingUpdateConsumer {
         Message message = update.getMessage();
         findLink(message).ifPresentOrElse(
                 link -> deliverVideo(message.getChatId(), link),
-                () -> reply(message.getChatId(), SEND_LINK_REPLY));
+                () -> defaultReply(message.getChatId(), SEND_LINK_REPLY));
     }
 
     private void deliverVideo(Long chatId, String link) {
@@ -46,20 +46,20 @@ public class ReelsBot extends DefaultLongPollingUpdateConsumer {
             videoDeliveryService.deliver(chatId, link);
         } catch (DownloadException | TelegramApiException e) {
             log.warn("Failed to deliver video {} to chat {}", link, chatId, e);
-            reply(chatId, DOWNLOAD_FAILED_REPLY);
+            defaultReply(chatId, DOWNLOAD_FAILED_REPLY);
         }
     }
 
-    private static Optional<String> findLink(Message message) {
+    private Optional<String> findLink(Message message) {
         List<MessageEntity> entities = Objects.requireNonNullElse(message.getEntities(), List.of());
         return entities.stream()
-                .map(ReelsBot::linkOf)
+                .map(this::linkOf)
                 .flatMap(Optional::stream)
                 .findFirst()
-                .map(ReelsBot::withScheme);
+                .map(this::withScheme);
     }
 
-    private static Optional<String> linkOf(MessageEntity entity) {
+    private Optional<String> linkOf(MessageEntity entity) {
         return switch (entity.getType()) {
             case EntityType.URL -> Optional.of(entity.getText());
             case EntityType.TEXTLINK -> Optional.of(entity.getUrl());
@@ -67,11 +67,11 @@ public class ReelsBot extends DefaultLongPollingUpdateConsumer {
         };
     }
 
-    private static String withScheme(String link) {
+    private String withScheme(String link) {
         return link.contains("://") ? link : "https://" + link;
     }
 
-    private void reply(Long chatId, String text) {
+    private void defaultReply(Long chatId, String text) {
         try {
             telegramClient.execute(SendMessage.builder()
                     .chatId(chatId)
