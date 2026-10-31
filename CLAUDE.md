@@ -59,11 +59,12 @@ docker compose build --no-cache    # update yt-dlp (unpinned, installed at image
 No linter or formatter is configured. Running without Docker requires `yt-dlp`, `ffmpeg` and `deno` on `PATH` (or `DOWNLOADER_YT_DLP_PATH`).
 
 ## Current Implementation
-Implemented so far: link → download → send → cleanup. Not yet: `/start`, URL whitelist, duration/size limits, specific error messages, chat action, concurrency, cache.
+Implemented so far: link → download → send → cleanup, parallel processing, "sending video" status. Not yet: `/start`, URL whitelist, duration/size limits, specific error messages, cache.
 - `ReelsBot` takes the first `url`/`text_link` entity of a message and calls `VideoDeliveryService`, which downloads via `YtDlpDownloader` and sends with `SendVideo` (width/height/duration passed explicitly so vertical videos keep their aspect ratio). Any `DownloadException`/`TelegramApiException` → one generic reply.
 - `YtDlpDownloader` runs one yt-dlp process per request in its own temp dir under `downloader.work-dir`; stdout/stderr go to files in that dir, the result comes back as JSON via `--print after_move:...`. The process is killed after `downloader.timeout`. `DownloadedVideo` is `AutoCloseable` and deletes the whole dir.
 - Format sort is `vcodec:h264` before `res:<max-height>` on purpose: TikTok often offers 720p only in HEVC, and H.264 compatibility wins over resolution.
-- Updates are processed sequentially: `DefaultLongPollingUpdateConsumer` uses a single-thread executor.
+- `ReelsBot` implements `LongPollingUpdateConsumer` directly (the library's `DefaultLongPollingUpdateConsumer` is single-threaded): each update is handled in its own virtual thread. `close()` waits for started deliveries, because Telegram has already confirmed those updates and won't resend them.
+- `VideoDeliveryService` limits concurrent download + send with a fair `Semaphore` (`downloader.max-concurrent-downloads`); the slot is held until the temp files are deleted, so it also bounds disk usage. While a request waits or works, a separate virtual thread repeats the `upload_video` chat action every 4 s via `executeAsync`, so stopping it never interrupts HTTP I/O.
 - YouTube may answer "Sign in to confirm you're not a bot" depending on the IP; that needs cookies, not a code fix.
 - Token flow: `TELEGRAM_BOT_TOKEN` → `TelegramBotProperties` (validated record, `toString()` masks the token) → `TelegramBotConfig`, the only place the token is used directly. It builds the `TelegramClient` (OkHttp) and `TelegramBotsLongPollingApplication` beans; everything else gets `TelegramClient` via DI.
 - Bot registration calls `GetMe` at startup, so starting the Spring context makes a real Telegram API request — this includes `ReelsProjectApplicationTests` (`@SpringBootTest` with a fake token).

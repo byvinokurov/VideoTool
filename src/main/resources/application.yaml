@@ -20,6 +20,8 @@ downloader:
   work-dir: ${java.io.tmpdir}/reels-bot
   timeout: 2m
   max-height: 720
+  # Сколько видео одновременно скачиваются и отправляются, остальные ждут в очереди
+  max-concurrent-downloads: 4
 
 logging:
   level:

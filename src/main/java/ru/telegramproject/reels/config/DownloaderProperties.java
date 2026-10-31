@@ -15,5 +15,6 @@ public record DownloaderProperties(
         @NotBlank String ytDlpPath,
         @NotNull Path workDir,
         @NotNull Duration timeout,
-        @Positive int maxHeight) {
+        @Positive int maxHeight,
+        @Positive int maxConcurrentDownloads) {
 }
