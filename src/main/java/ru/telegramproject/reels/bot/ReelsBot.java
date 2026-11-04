@@ -38,9 +38,6 @@ public class ReelsBot implements LongPollingUpdateConsumer {
         updates.forEach(update -> updateHandlers.execute(() -> handle(update)));
     }
 
-    /**
-     * Дожидается уже начатых доставок: Telegram считает эти обновления полученными и повторно их не пришлёт.
-     */
     @Override
     public void close() {
         updateHandlers.close();
