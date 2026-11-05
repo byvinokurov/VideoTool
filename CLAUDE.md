@@ -59,7 +59,8 @@ docker compose build --no-cache    # update yt-dlp (unpinned, installed at image
 No linter or formatter is configured. Running without Docker requires `yt-dlp`, `ffmpeg` and `deno` on `PATH` (or `DOWNLOADER_YT_DLP_PATH`).
 
 ## Current Implementation
-Implemented so far: link → download → send → cleanup, parallel processing, "sending video" status. Not yet: `/start`, URL whitelist, duration/size limits, specific error messages, cache.
+Implemented so far: `/start`, link → download → send → cleanup, parallel processing, "sending video" status. Not yet: URL whitelist, duration/size limits, specific error messages, cache.
+- `/start` → `StartCommand` (`IBotCommand` from `telegrambots-extensions`) sends `welcome.gif` from resources with the welcome message as caption. The GIF is uploaded once; the `file_id` from Telegram's reply is reused afterwards. If the animation fails, the greeting goes out as plain text.
 - `ReelsBot` takes the first `url`/`text_link` entity of a message and calls `VideoDeliveryService`, which downloads via `YtDlpDownloader` and sends with `SendVideo` (width/height/duration passed explicitly so vertical videos keep their aspect ratio). Any `DownloadException`/`TelegramApiException` → one generic reply.
 - `YtDlpDownloader` runs one yt-dlp process per request in its own temp dir under `downloader.work-dir`; stdout/stderr go to files in that dir, the result comes back as JSON via `--print after_move:...`. The process is killed after `downloader.timeout`. `DownloadedVideo` is `AutoCloseable` and deletes the whole dir.
 - Format sort is `vcodec:h264` before `res:<max-height>` on purpose: TikTok often offers 720p only in HEVC, and H.264 compatibility wins over resolution.
@@ -72,7 +73,7 @@ Implemented so far: link → download → send → cleanup, parallel processing,
 
 ## MVP Features
 Implement only the features listed here.
-- `/start` — greeting and a short instruction: send a link, get a video
+- `/start` — welcome message and a short instruction: send a link, get a video
 - User sends a link → bot replies with the video file
 - While processing, the bot shows the "sending video..." status
 - Repeated link → video is sent instantly from cache, without downloading

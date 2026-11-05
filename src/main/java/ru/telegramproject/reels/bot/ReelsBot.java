@@ -1,13 +1,20 @@
 package ru.telegramproject.reels.bot;
 
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.telegram.telegrambots.extensions.bots.commandbot.commands.CommandRegistry;
+import org.telegram.telegrambots.extensions.bots.commandbot.commands.IBotCommand;
 import org.telegram.telegrambots.longpolling.interfaces.LongPollingUpdateConsumer;
+import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.EntityType;
 import org.telegram.telegrambots.meta.api.objects.MessageEntity;
 import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
+import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScopeDefault;
 import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
@@ -19,6 +26,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -29,13 +37,28 @@ public class ReelsBot implements LongPollingUpdateConsumer {
     private static final String DOWNLOAD_FAILED_REPLY = "Не удалось скачать видео. Попробуйте позже.";
 
     private final TelegramClient telegramClient;
+    private final CommandRegistry commandRegistry;
+    private final List<IBotCommand> commands;
     private final VideoDeliveryService videoDeliveryService;
     private final ExecutorService updateHandlers =
             Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("update-", 1).factory());
 
+    @SneakyThrows
+    @PostConstruct
+    public void initCommands() {
+        List<BotCommand> menu = commands.stream()
+                .map(c -> BotCommand.builder().command(c.getCommandIdentifier()).description(c.getDescription()).build())
+                .collect(Collectors.toList());
+
+        telegramClient.execute(SetMyCommands.builder()
+                .commands(menu)
+                .scope(new BotCommandScopeDefault())
+                .build());
+    }
+
     @Override
     public void consume(List<Update> updates) {
-        updates.forEach(update -> updateHandlers.execute(() -> handle(update)));
+        updates.forEach(update -> updateHandlers.execute(() -> handleUpdate(update)));
     }
 
     @Override
@@ -43,12 +66,17 @@ public class ReelsBot implements LongPollingUpdateConsumer {
         updateHandlers.close();
     }
 
-    private void handle(Update update) {
+    private void handleUpdate(Update update) {
         if (!update.hasMessage() || !update.getMessage().hasText()) {
             return;
         }
 
         Message message = update.getMessage();
+        if (message.isCommand()) {
+            commandRegistry.executeCommand(message);
+            return;
+        }
+
         findLink(message).ifPresentOrElse(
                 link -> deliverVideo(message.getChatId(), link),
                 () -> defaultReply(message.getChatId(), SEND_LINK_REPLY));

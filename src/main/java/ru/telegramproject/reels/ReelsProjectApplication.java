@@ -3,8 +3,8 @@ package ru.telegramproject.reels;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import ru.telegramproject.reels.config.DownloaderProperties;
-import ru.telegramproject.reels.config.TelegramBotProperties;
+import ru.telegramproject.reels.config.properties.DownloaderProperties;
+import ru.telegramproject.reels.config.properties.TelegramBotProperties;
 
 @SpringBootApplication
 @EnableConfigurationProperties({TelegramBotProperties.class, DownloaderProperties.class})
