@@ -2,7 +2,6 @@ package ru.telegramproject.reels.bot;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.extensions.bots.commandbot.commands.CommandRegistry;
@@ -43,17 +42,19 @@ public class ReelsBot implements LongPollingUpdateConsumer {
     private final ExecutorService updateHandlers =
             Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("update-", 1).factory());
 
-    @SneakyThrows
     @PostConstruct
     public void initCommands() {
         List<BotCommand> menu = commands.stream()
                 .map(c -> BotCommand.builder().command(c.getCommandIdentifier()).description(c.getDescription()).build())
                 .collect(Collectors.toList());
-
-        telegramClient.execute(SetMyCommands.builder()
-                .commands(menu)
-                .scope(new BotCommandScopeDefault())
-                .build());
+        try {
+            telegramClient.execute(SetMyCommands.builder()
+                    .commands(menu)
+                    .scope(new BotCommandScopeDefault())
+                    .build());
+        } catch (TelegramApiException e) {
+            log.warn("Failed to update bot commands menu", e);
+        }
     }
 
     @Override
