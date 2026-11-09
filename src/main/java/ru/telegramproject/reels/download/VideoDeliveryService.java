@@ -6,8 +6,10 @@ import org.telegram.telegrambots.meta.api.methods.ActionType;
 import org.telegram.telegrambots.meta.api.methods.send.SendChatAction;
 import org.telegram.telegrambots.meta.api.methods.send.SendVideo;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
+import org.telegram.telegrambots.meta.api.objects.ReplyParameters;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
+import ru.telegramproject.reels.bot.LinkRequest;
 import ru.telegramproject.reels.config.properties.DownloaderProperties;
 
 import java.time.Duration;
@@ -39,31 +41,35 @@ public class VideoDeliveryService {
     /**
      * Скачивает и отправляет видео; возвращает размер отправленного файла в байтах (для суточной квоты).
      */
-    public long deliver(Long chatId, String url) throws TelegramApiException {
-        Thread uploadStatus = Thread.ofVirtual().start(() -> showUploadStatus(chatId));
+    public long deliver(LinkRequest request) throws TelegramApiException {
+        Thread uploadStatus = Thread.ofVirtual().start(() -> showUploadStatus(request.chatId()));
         try {
-            return deliverInDownloadSlot(chatId, url);
+            return deliverInDownloadSlot(request);
         } finally {
             uploadStatus.interrupt();
         }
     }
 
-    private long deliverInDownloadSlot(Long chatId, String url) throws TelegramApiException {
+    private long deliverInDownloadSlot(LinkRequest request) throws TelegramApiException {
         long queuedAt = System.nanoTime();
         acquireDownloadSlot();
         try {
-            return downloadAndSend(chatId, url, queuedAt);
+            return downloadAndSend(request, queuedAt);
         } finally {
             downloadSlots.release();
         }
     }
 
-    private long downloadAndSend(Long chatId, String url, long queuedAt) throws TelegramApiException {
+    private long downloadAndSend(LinkRequest request, long queuedAt) throws TelegramApiException {
         long downloadStartedAt = System.nanoTime();
-        try (DownloadedVideo video = downloader.download(url)) {
+        try (DownloadedVideo video = downloader.download(request.link())) {
             long sendStartedAt = System.nanoTime();
             telegramClient.execute(SendVideo.builder()
-                    .chatId(chatId)
+                    .chatId(request.chatId())
+                    .replyParameters(ReplyParameters.builder()
+                            .messageId(request.messageId())
+                            .allowSendingWithoutReply(true)
+                            .build())
                     .video(new InputFile(video.file().toFile()))
                     .width(video.width())
                     .height(video.height())
@@ -71,7 +77,7 @@ public class VideoDeliveryService {
                     .supportsStreaming(true)
                     .build());
             log.info("Delivered {} to chat {}: queue {} ms, download {} ms, send {} ms",
-                    url, chatId,
+                    request.link(), request.chatId(),
                     millisBetween(queuedAt, downloadStartedAt),
                     millisBetween(downloadStartedAt, sendStartedAt),
                     millisBetween(sendStartedAt, System.nanoTime()));

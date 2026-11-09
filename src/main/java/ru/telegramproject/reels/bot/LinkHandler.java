@@ -1,11 +1,12 @@
-package ru.telegramproject.reels.download;
+package ru.telegramproject.reels.bot;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
-import ru.telegramproject.reels.bot.ChatReplier;
+import ru.telegramproject.reels.download.DownloadException;
+import ru.telegramproject.reels.download.VideoDeliveryService;
 import ru.telegramproject.reels.limit.BotQueueLimit;
 import ru.telegramproject.reels.limit.LimitMessages;
 import ru.telegramproject.reels.limit.UserQueueLimit;
@@ -31,30 +32,30 @@ public class LinkHandler {
     private final ChatReplier chatReplier;
 
     public void handle(Message message, String link) {
-        Long chatId = message.getChatId();
-        chatReplier.markSeen(chatId, message.getMessageId());
+        LinkRequest request = new LinkRequest(message.getFrom().getId(), message.getChatId(), message.getMessageId(), link);
+        chatReplier.markSeen(request.chatId(), request.messageId());
         if (!botQueueLimit.tryEnter()) {
-            log.info("Download queue is full, rejected {} from chat {}", link, chatId);
-            chatReplier.reply(chatId, LimitMessages.queueFull());
+            log.info("Download queue is full, rejected {} from chat {}", link, request.chatId());
+            replyToLink(request, LimitMessages.queueFull());
             return;
         }
         try {
-            handleInUserQueue(message.getFrom().getId(), chatId, link);
+            handleInUserQueue(request);
         } finally {
             botQueueLimit.leave();
         }
     }
 
-    private void handleInUserQueue(Long userId, Long chatId, String link) {
-        Optional<UserQueueLimit.Turn> turn = userQueueLimit.tryEnter(userId);
+    private void handleInUserQueue(LinkRequest request) {
+        Optional<UserQueueLimit.Turn> turn = userQueueLimit.tryEnter(request.userId());
         if (turn.isEmpty()) {
-            log.info("User {} has too many links waiting, rejected {}", userId, link);
-            chatReplier.reply(chatId, LimitMessages.tooManyWaiting());
+            log.info("User {} has too many links waiting, rejected {}", request.userId(), request.link());
+            replyToLink(request, LimitMessages.tooManyWaiting());
             return;
         }
         try (UserQueueLimit.Turn userTurn = turn.get()) {
-            if (allowedByQuota(userQuotaLimit.tryAcquire(userId), userId, chatId, link)) {
-                deliverInTurn(userTurn, userId, chatId, link);
+            if (allowedByQuota(userQuotaLimit.tryAcquire(request.userId()), request)) {
+                deliverInTurn(userTurn, request);
             }
         }
     }
@@ -62,38 +63,45 @@ public class LinkHandler {
     /**
      * Ждёт своей очереди и перед скачиванием ещё раз проверяет суточный объём.
      */
-    private void deliverInTurn(UserQueueLimit.Turn turn, Long userId, Long chatId, String link) {
+    private void deliverInTurn(UserQueueLimit.Turn turn, LinkRequest request) {
         try {
             turn.awaitDownload();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.warn("Interrupted while waiting for a download turn of user {}", userId);
+            log.warn("Interrupted while waiting for a download turn of user {}", request.userId());
             return;
         }
-        if (allowedByQuota(userQuotaLimit.checkDailyBytes(userId), userId, chatId, link)) {
-            deliver(userId, chatId, link);
+        if (allowedByQuota(userQuotaLimit.checkDailyBytes(request.userId()), request)) {
+            deliver(request);
         }
     }
 
     /**
      * Если квота превышена — сообщает человеку, когда можно снова, и возвращает false.
      */
-    private boolean allowedByQuota(UserQuotaResult quota, Long userId, Long chatId, String link) {
+    private boolean allowedByQuota(UserQuotaResult quota, LinkRequest request) {
         if (quota.status() == UserQuotaResult.Status.ALLOWED) {
             return true;
         }
-        log.info("User {} hit {}, rejected {}", userId, quota.status(), link);
-        chatReplier.reply(chatId, LimitMessages.quotaExceeded(quota));
+        log.info("User {} hit {}, rejected {}", request.userId(), quota.status(), request.link());
+        replyToLink(request, LimitMessages.quotaExceeded(quota));
         return false;
     }
 
-    private void deliver(Long userId, Long chatId, String link) {
+    private void deliver(LinkRequest request) {
         try {
-            long bytes = videoDeliveryService.deliver(chatId, link);
-            userQuotaLimit.addDeliveredBytes(userId, bytes);
+            long bytes = videoDeliveryService.deliver(request);
+            userQuotaLimit.addDeliveredBytes(request.userId(), bytes);
         } catch (DownloadException | TelegramApiException e) {
-            log.warn("Failed to deliver video {} to chat {}", link, chatId, e);
-            chatReplier.reply(chatId, DOWNLOAD_FAILED_REPLY);
+            log.warn("Failed to deliver video {} to chat {}", request.link(), request.chatId(), e);
+            replyToLink(request, DOWNLOAD_FAILED_REPLY);
         }
+    }
+
+    /**
+     * Ответ цитатой на сообщение со ссылкой: видно, к какой ссылке он относится.
+     */
+    private void replyToLink(LinkRequest request, String text) {
+        chatReplier.replyTo(request.chatId(), request.messageId(), text);
     }
 }

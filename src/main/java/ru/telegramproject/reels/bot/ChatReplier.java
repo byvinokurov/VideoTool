@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.reactions.SetMessageReaction;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.objects.ReplyParameters;
 import org.telegram.telegrambots.meta.api.objects.reactions.ReactionTypeEmoji;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
@@ -24,13 +25,31 @@ public class ChatReplier {
     private final TelegramClient telegramClient;
 
     public void reply(Long chatId, String text) {
+        send(SendMessage.builder()
+                .chatId(chatId)
+                .text(text)
+                .build());
+    }
+
+    /**
+     * Ответ цитатой на конкретное сообщение. Если человек его удалил, текст всё равно придёт.
+     */
+    public void replyTo(Long chatId, Integer messageId, String text) {
+        send(SendMessage.builder()
+                .chatId(chatId)
+                .text(text)
+                .replyParameters(ReplyParameters.builder()
+                        .messageId(messageId)
+                        .allowSendingWithoutReply(true)
+                        .build())
+                .build());
+    }
+
+    private void send(SendMessage message) {
         try {
-            telegramClient.execute(SendMessage.builder()
-                    .chatId(chatId)
-                    .text(text)
-                    .build());
+            telegramClient.execute(message);
         } catch (TelegramApiException e) {
-            log.error("Failed to send reply to chat {}", chatId, e);
+            log.error("Failed to send reply to chat {}", message.getChatId(), e);
         }
     }
 

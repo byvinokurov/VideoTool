@@ -16,7 +16,6 @@ import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScope
 import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
-import ru.telegramproject.reels.download.LinkHandler;
 import ru.telegramproject.reels.limit.AntispamLimit;
 import ru.telegramproject.reels.limit.AntispamResult;
 import ru.telegramproject.reels.limit.LimitMessages;
