@@ -1,4 +1,4 @@
-package ru.telegramproject.reels.downloader.dto;
+package ru.telegramproject.reels.download;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.util.FileSystemUtils;
@@ -7,7 +7,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 /**
- * Скачанный файл во временном каталоге загрузки; {@link #close()} удаляет весь каталог.
+ * Скачанное видео во временном каталоге; {@link #close()} удаляет каталог.
  */
 @Slf4j
 public record DownloadedVideo(
