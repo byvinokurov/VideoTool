@@ -1,5 +1,8 @@
-package ru.telegramproject.reels.exception;
+package ru.telegramproject.reels.download;
 
+/**
+ * Ошибка скачивания видео.
+ */
 public class DownloadException extends RuntimeException {
 
     public DownloadException(String message) {

@@ -1,4 +1,4 @@
-package ru.telegramproject.reels.config;
+package ru.telegramproject.reels.config.properties;
 
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.boot.context.properties.ConfigurationProperties;

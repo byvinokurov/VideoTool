@@ -1,11 +1,9 @@
-package ru.telegramproject.reels.downloader;
+package ru.telegramproject.reels.download;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import ru.telegramproject.reels.config.DownloaderProperties;
-import ru.telegramproject.reels.downloader.dto.DownloadedVideo;
-import ru.telegramproject.reels.exception.DownloadException;
+import ru.telegramproject.reels.config.properties.DownloaderProperties;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -17,9 +15,12 @@ import java.util.concurrent.TimeUnit;
 
 import static java.util.function.Predicate.not;
 
+/**
+ * Скачивает видео по ссылке через yt-dlp.
+ */
 @Component
 @RequiredArgsConstructor
-public class YtDlpDownloader {
+public class VideoDownloader {
 
     private static final String OUTPUT_TEMPLATE = "video.%(ext)s";
     private static final String RESULT_TEMPLATE = "after_move:%(.{filepath,width,height,duration})j";

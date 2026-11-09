@@ -1,4 +1,4 @@
-package ru.telegramproject.reels.config;
+package ru.telegramproject.reels.config.properties;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -15,5 +15,6 @@ public record DownloaderProperties(
         @NotBlank String ytDlpPath,
         @NotNull Path workDir,
         @NotNull Duration timeout,
-        @Positive int maxHeight) {
+        @Positive int maxHeight,
+        @Positive int maxConcurrentDownloads) {
 }
