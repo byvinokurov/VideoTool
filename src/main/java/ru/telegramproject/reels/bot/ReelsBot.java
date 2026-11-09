@@ -16,8 +16,8 @@ import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScope
 import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
-import ru.telegramproject.reels.downloader.LinkRequestHandler;
-import ru.telegramproject.reels.limit.AntispamService;
+import ru.telegramproject.reels.download.LinkHandler;
+import ru.telegramproject.reels.limit.AntispamLimit;
 import ru.telegramproject.reels.limit.AntispamResult;
 import ru.telegramproject.reels.limit.LimitMessages;
 
@@ -38,8 +38,8 @@ public class ReelsBot implements LongPollingUpdateConsumer {
     private final TelegramClient telegramClient;
     private final CommandRegistry commandRegistry;
     private final List<IBotCommand> commands;
-    private final AntispamService antispamService;
-    private final LinkRequestHandler linkRequestHandler;
+    private final AntispamLimit antispamLimit;
+    private final LinkHandler linkHandler;
     private final ChatReplier chatReplier;
     private final ExecutorService updateHandlers =
             Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("update-", 1).factory());
@@ -75,7 +75,7 @@ public class ReelsBot implements LongPollingUpdateConsumer {
         }
 
         Message message = update.getMessage();
-        AntispamResult antispam = antispamService.register(message.getFrom().getId());
+        AntispamResult antispam = antispamLimit.register(message.getFrom().getId());
         switch (antispam.status()) {
             case ALLOWED -> handleMessage(message);
             case MUTED -> {
@@ -93,7 +93,7 @@ public class ReelsBot implements LongPollingUpdateConsumer {
             return;
         }
         findLink(message).ifPresentOrElse(
-                link -> linkRequestHandler.handle(message.getChatId(), link),
+                link -> linkHandler.handle(message, link),
                 () -> chatReplier.reply(message.getChatId(), SEND_LINK_REPLY));
     }
 

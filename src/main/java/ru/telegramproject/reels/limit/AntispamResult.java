@@ -3,7 +3,7 @@ package ru.telegramproject.reels.limit;
 import java.time.Duration;
 
 /**
- * Что делать с очередным сообщением человека.
+ * Ответ антиспама на сообщение человека.
  *
  * @param muteDuration на сколько наказан; заполнено только для {@link Status#MUTED}
  */

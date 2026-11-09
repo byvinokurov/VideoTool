@@ -12,15 +12,15 @@ import java.util.Collections;
 import java.util.Deque;
 
 /**
- * Антиспам: считает сообщения каждого человека и при превышении лимита заставляет бота молчать.
+ * Антиспам: при слишком частых сообщениях бот перестаёт отвечать человеку.
  */
 @Component
-public class AntispamService {
+public class AntispamLimit {
 
     private final LimitProperties.Antispam limits;
     private final Cache<Long, UserActivity> users;
 
-    public AntispamService(LimitProperties properties) {
+    public AntispamLimit(LimitProperties properties) {
         this.limits = properties.antispam();
         this.users = Caffeine.newBuilder()
                 .expireAfterAccess(memoryTime(limits))

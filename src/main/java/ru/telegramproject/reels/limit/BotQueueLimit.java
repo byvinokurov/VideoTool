@@ -6,15 +6,14 @@ import ru.telegramproject.reels.config.properties.LimitProperties;
 import java.util.concurrent.Semaphore;
 
 /**
- * Общая очередь бота: сколько видео одновременно в работе (качаются и ждут свободного места).
- * Сверх лимита ссылка сразу отклоняется, а не ждёт без конца.
+ * Общая очередь бота: сколько ссылок всех людей одновременно в работе.
  */
 @Component
-public class DownloadQueueLimit {
+public class BotQueueLimit {
 
     private final Semaphore places;
 
-    public DownloadQueueLimit(LimitProperties properties) {
+    public BotQueueLimit(LimitProperties properties) {
         this.places = new Semaphore(properties.queue().maxSize());
     }
 

@@ -26,11 +26,11 @@ Decided by the owner; they override the original MVP spec.
 ```
 Telegram update
     ↓
-AntispamService (anti-spam)
+AntispamLimit (anti-spam)
     ↓
-Router: command → CommandRegistry | link → LinkRequestHandler | other text → hint
+Router: command → CommandRegistry | link → LinkHandler | other text → hint
     ↓
-Limits: bot-wide queue → per-user quotas (planned)
+Limits: bot-wide queue → per-user quotas → per-user download turn
     ↓
 Cache check by file_id (planned)
     ↓
@@ -52,14 +52,14 @@ docker compose build --no-cache    # update yt-dlp (unpinned, installed at image
 No linter or formatter is configured. Running without Docker requires `yt-dlp`, `ffmpeg` and `deno` on `PATH` (or `DOWNLOADER_YT_DLP_PATH`).
 
 ## Current Implementation
-Implemented so far: `/start`, link → download → send → cleanup, parallel processing, "sending video" status, anti-spam, bot-wide download queue limit. Not yet: per-user quotas, specific error messages, blocking the generic extractor, cache.
-- `ReelsBot` is only a router: every text message first goes through `AntispamService`, then a command → `CommandRegistry`, the first `url`/`text_link` entity → `LinkRequestHandler`, anything else → a hint. Text replies go through `ChatReplier`.
+Implemented so far: `/start`, link → download → send → cleanup, parallel processing, "sending video" status, anti-spam, bot-wide download queue limit, per-user quotas and download turns. Not yet: specific error messages, blocking the generic extractor, cache.
+- `ReelsBot` is only a router: every text message first goes through `AntispamLimit`, then a command → `CommandRegistry`, the first `url`/`text_link` entity → `LinkHandler`, anything else → a hint. Text replies go through `ChatReplier`.
 - Commands are `IBotCommand` beans in `command/`, registered in `CommandRegistry` by `TelegramBotConfig` (startup fails on duplicate names). `ReelsBot.initCommands()` publishes the menu via `SetMyCommands` in `@Order` order (the registry is a `HashMap` and loses order); a menu failure is only logged. `/language` and `/donate` are empty stubs.
 - `/start` → `StartCommand` sends `welcome.gif` from resources with the welcome text as caption. The GIF is uploaded once; the `file_id` from Telegram's reply is reused afterwards. If the animation fails, the greeting goes out as plain text.
-- Limits live in `antispam/` and are configured under `limits:` (`limits.antispam`, `limits.queue`); user-facing limit texts are all in `LimitMessages`. `AntispamService` returns `AntispamResult` (`ALLOWED` / `MUTED` once when the limit is hit / `IGNORED` while muted): more than `max-messages` per `window` → the bot ignores the user for the next duration from `mutes` (15m → 1h → 24h); the count restarts when `forgive-after` passes after the end of the last mute. Per-user state is in a Caffeine cache kept for longest mute + `forgive-after`, in memory only (Caffeine refreshes access time with ~1 s precision, so test it with second-scale durations). `DownloadQueueLimit`: at most `queue.max-size` links in work bot-wide (downloading + waiting); extra links are rejected right away.
-- `LinkRequestHandler` checks the limits, then `VideoDeliveryService` downloads via `YtDlpDownloader` and sends with `SendVideo` (width/height/duration passed explicitly so vertical videos keep their aspect ratio). Any `DownloadException`/`TelegramApiException` → one generic reply.
+- Limits live in `limit/` and are configured under `limits:` (`limits.antispam`, `limits.queue`, `limits.per-user`); user-facing limit texts are all in `LimitMessages`. `AntispamLimit` returns `AntispamResult` (`ALLOWED` / `MUTED` once when the limit is hit / `IGNORED` while muted): more than `max-messages` per `window` → the bot ignores the user for the next duration from `mutes` (15m → 1h → 24h); the count restarts when `forgive-after` passes after the end of the last mute. Per-user state is in a Caffeine cache kept for longest mute + `forgive-after`, in memory only (Caffeine refreshes access time with ~1 s precision, so test it with second-scale durations). `BotQueueLimit`: at most `queue.max-size` links in work bot-wide (downloading + waiting); extra links are rejected right away. `UserQuotaLimit` returns `UserQuotaResult`: per user `downloads-per-hour` and `downloads-per-day` (sliding windows, a link counts as soon as it is accepted, even if the download later fails) and `bytes-per-day` of delivered video; the reply says when the next download is possible. `UserQueueLimit`: per user at most `per-user.max-concurrent-downloads` videos download at once (default 1, raise by hand if waiting is too long) and `max-waiting-downloads` more wait; extra links are rejected so one user's backlog can't fill the bot-wide queue. Its `Turn` is `AutoCloseable` and releases exactly the semaphores it took. The daily bytes quota is checked again right before the download, because the user's earlier videos may have been sent while the link waited.
+- `LinkHandler` always puts 👀 on the link message (`ChatReplier.markSeen`), then checks bot-wide queue → user queue → quotas → waits for the user's turn → bytes quota again; then `VideoDeliveryService` downloads via `VideoDownloader` and sends with `SendVideo` (width/height/duration passed explicitly so vertical videos keep their aspect ratio). Any `DownloadException`/`TelegramApiException` → one generic reply.
 - `VideoDeliveryService` limits concurrent download + send with a fair `Semaphore` (`downloader.max-concurrent-downloads`); the slot is held until the temp files are deleted, so it also bounds disk usage. While a request waits or works, a separate virtual thread repeats the `upload_video` chat action every 4 s via `executeAsync`, so stopping it never interrupts HTTP I/O.
-- `YtDlpDownloader` runs one yt-dlp process per request in its own temp dir under `downloader.work-dir`; stdout/stderr go to files in that dir, the result comes back as JSON via `--print after_move:...`. The process is killed after `downloader.timeout`. `DownloadedVideo` is `AutoCloseable` and deletes the whole dir.
+- `VideoDownloader` runs one yt-dlp process per request in its own temp dir under `downloader.work-dir`; stdout/stderr go to files in that dir, the result comes back as JSON via `--print after_move:...`. The process is killed after `downloader.timeout`. `DownloadedVideo` is `AutoCloseable` and deletes the whole dir.
 - Format sort is `vcodec:h264` before `res:<max-height>` on purpose: TikTok often offers 720p only in HEVC, and H.264 compatibility wins over resolution.
 - `ReelsBot` implements `LongPollingUpdateConsumer` directly (the library's `DefaultLongPollingUpdateConsumer` is single-threaded): each update is handled in its own virtual thread. `close()` waits for started deliveries, because Telegram has already confirmed those updates and won't resend them.
 - Site blocks depend on the server IP, not on code: from a datacenter IP Instagram redirects to login (`is_from_rle`) and answers 429, YouTube may ask "Sign in to confirm you're not a bot". The owner declined cookies; the options left are a proxy for Instagram or another server.
@@ -73,12 +73,12 @@ Work goes in stages on branch `feature-1`; each stage is reviewed separately and
 2. ✅ `/start` with GIF, command menu.
 3. Clear error messages: download too long, unsupported link, private/deleted/unavailable, site not responding, photo-only post, file too large, any other failure. Block yt-dlp's generic extractor and live streams.
 4. ✅ Parallel processing, "sending video" status, concurrent download limit.
-5. Per-user limits: (a) ✅ anti-spam and bot-wide queue; (b) quotas — 3 links at once then 1 per 20 s, 25 per hour, 50 per day, 3 GB per day; (c) the owner's Telegram ID is exempt from limits.
+5. Per-user limits: (a) ✅ anti-spam and bot-wide queue; (b) ✅ quotas — 25 per hour, 50 per day, 3 GB per day, plus per-user concurrent downloads (default 1, 👀 on every link); no pace limit by the owner's choice; (c) the owner's Telegram ID is exempt from limits.
 6. Cache: repeated link → `file_id` without downloading; "this link is already downloading".
 7. Local Bot API Server: uploads up to 2 GB.
 8. Pick the best quality that fits the size limit (1080/720/480/360).
 9. Server: run on the VPS again, daily yt-dlp update, decide on Instagram.
-10. Group chats (postponed): per-chat queue (one video at a time, 3 waiting in private chats, 5 in groups, 👀 reaction), no error spam in groups.
+10. Group chats (postponed): enable seeing links in groups, no error/limit spam in groups.
 
 ## Code Style Rules
 - One class per concern (for example one class per limit), no god classes; each method does one thing. Short comments only where the logic is not obvious.

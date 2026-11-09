@@ -1,4 +1,4 @@
-package ru.telegramproject.reels.downloader;
+package ru.telegramproject.reels.download;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -15,9 +15,12 @@ import java.util.concurrent.TimeUnit;
 
 import static java.util.function.Predicate.not;
 
+/**
+ * Скачивает видео по ссылке через yt-dlp.
+ */
 @Component
 @RequiredArgsConstructor
-public class YtDlpDownloader {
+public class VideoDownloader {
 
     private static final String OUTPUT_TEMPLATE = "video.%(ext)s";
     private static final String RESULT_TEMPLATE = "after_move:%(.{filepath,width,height,duration})j";

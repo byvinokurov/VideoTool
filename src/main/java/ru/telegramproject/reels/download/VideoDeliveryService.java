@@ -1,4 +1,4 @@
-package ru.telegramproject.reels.downloader;
+package ru.telegramproject.reels.download;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -14,6 +14,9 @@ import java.time.Duration;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Доставка видео: скачивает по ссылке и отправляет в чат.
+ */
 @Slf4j
 @Service
 public class VideoDeliveryService {
@@ -23,36 +26,39 @@ public class VideoDeliveryService {
      */
     private static final Duration UPLOAD_STATUS_INTERVAL = Duration.ofSeconds(4);
 
-    private final YtDlpDownloader downloader;
+    private final VideoDownloader downloader;
     private final TelegramClient telegramClient;
     private final Semaphore downloadSlots;
 
-    public VideoDeliveryService(YtDlpDownloader downloader, TelegramClient telegramClient, DownloaderProperties properties) {
+    public VideoDeliveryService(VideoDownloader downloader, TelegramClient telegramClient, DownloaderProperties properties) {
         this.downloader = downloader;
         this.telegramClient = telegramClient;
         this.downloadSlots = new Semaphore(properties.maxConcurrentDownloads(), true);
     }
 
-    public void deliver(Long chatId, String url) throws TelegramApiException {
+    /**
+     * Скачивает и отправляет видео; возвращает размер отправленного файла в байтах (для суточной квоты).
+     */
+    public long deliver(Long chatId, String url) throws TelegramApiException {
         Thread uploadStatus = Thread.ofVirtual().start(() -> showUploadStatus(chatId));
         try {
-            deliverInTurn(chatId, url);
+            return deliverInDownloadSlot(chatId, url);
         } finally {
             uploadStatus.interrupt();
         }
     }
 
-    private void deliverInTurn(Long chatId, String url) throws TelegramApiException {
+    private long deliverInDownloadSlot(Long chatId, String url) throws TelegramApiException {
         long queuedAt = System.nanoTime();
         acquireDownloadSlot();
         try {
-            downloadAndSend(chatId, url, queuedAt);
+            return downloadAndSend(chatId, url, queuedAt);
         } finally {
             downloadSlots.release();
         }
     }
 
-    private void downloadAndSend(Long chatId, String url, long queuedAt) throws TelegramApiException {
+    private long downloadAndSend(Long chatId, String url, long queuedAt) throws TelegramApiException {
         long downloadStartedAt = System.nanoTime();
         try (DownloadedVideo video = downloader.download(url)) {
             long sendStartedAt = System.nanoTime();
@@ -69,6 +75,7 @@ public class VideoDeliveryService {
                     millisBetween(queuedAt, downloadStartedAt),
                     millisBetween(downloadStartedAt, sendStartedAt),
                     millisBetween(sendStartedAt, System.nanoTime()));
+            return video.file().toFile().length();
         }
     }
 
