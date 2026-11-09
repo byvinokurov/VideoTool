@@ -4,8 +4,6 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import ru.telegramproject.reels.config.properties.DownloaderProperties;
-import ru.telegramproject.reels.downloader.dto.DownloadedVideo;
-import ru.telegramproject.reels.exception.DownloadException;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 

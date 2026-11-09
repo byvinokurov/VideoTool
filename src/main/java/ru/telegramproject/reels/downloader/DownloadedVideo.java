@@ -1,4 +1,4 @@
-package ru.telegramproject.reels.downloader.dto;
+package ru.telegramproject.reels.downloader;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.util.FileSystemUtils;

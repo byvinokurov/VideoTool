@@ -8,7 +8,6 @@ import org.telegram.telegrambots.extensions.bots.commandbot.commands.CommandRegi
 import org.telegram.telegrambots.extensions.bots.commandbot.commands.IBotCommand;
 import org.telegram.telegrambots.longpolling.interfaces.LongPollingUpdateConsumer;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.EntityType;
 import org.telegram.telegrambots.meta.api.objects.MessageEntity;
 import org.telegram.telegrambots.meta.api.objects.Update;
@@ -17,8 +16,10 @@ import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScope
 import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
-import ru.telegramproject.reels.exception.DownloadException;
-import ru.telegramproject.reels.service.VideoDeliveryService;
+import ru.telegramproject.reels.downloader.LinkRequestHandler;
+import ru.telegramproject.reels.limit.AntispamService;
+import ru.telegramproject.reels.limit.AntispamResult;
+import ru.telegramproject.reels.limit.LimitMessages;
 
 import java.util.List;
 import java.util.Objects;
@@ -32,13 +33,14 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ReelsBot implements LongPollingUpdateConsumer {
 
-    private static final String SEND_LINK_REPLY = "Пришлите ссылку на видео из YouTube, TikTok, Instagram или VK.";
-    private static final String DOWNLOAD_FAILED_REPLY = "Не удалось скачать видео. Попробуйте позже.";
+    private static final String SEND_LINK_REPLY = "Пришли ссылку на видео из YouTube, TikTok, Instagram или VK.";
 
     private final TelegramClient telegramClient;
     private final CommandRegistry commandRegistry;
     private final List<IBotCommand> commands;
-    private final VideoDeliveryService videoDeliveryService;
+    private final AntispamService antispamService;
+    private final LinkRequestHandler linkRequestHandler;
+    private final ChatReplier chatReplier;
     private final ExecutorService updateHandlers =
             Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("update-", 1).factory());
 
@@ -73,23 +75,26 @@ public class ReelsBot implements LongPollingUpdateConsumer {
         }
 
         Message message = update.getMessage();
+        AntispamResult antispam = antispamService.register(message.getFrom().getId());
+        switch (antispam.status()) {
+            case ALLOWED -> handleMessage(message);
+            case MUTED -> {
+                log.info("User {} muted for {}", message.getFrom().getId(), antispam.muteDuration());
+                chatReplier.reply(message.getChatId(), LimitMessages.muted(antispam.muteDuration()));
+            }
+            case IGNORED -> {
+            }
+        }
+    }
+
+    private void handleMessage(Message message) {
         if (message.isCommand()) {
             commandRegistry.executeCommand(message);
             return;
         }
-
         findLink(message).ifPresentOrElse(
-                link -> deliverVideo(message.getChatId(), link),
-                () -> defaultReply(message.getChatId(), SEND_LINK_REPLY));
-    }
-
-    private void deliverVideo(Long chatId, String link) {
-        try {
-            videoDeliveryService.deliver(chatId, link);
-        } catch (DownloadException | TelegramApiException e) {
-            log.warn("Failed to deliver video {} to chat {}", link, chatId, e);
-            defaultReply(chatId, DOWNLOAD_FAILED_REPLY);
-        }
+                link -> linkRequestHandler.handle(message.getChatId(), link),
+                () -> chatReplier.reply(message.getChatId(), SEND_LINK_REPLY));
     }
 
     private Optional<String> findLink(Message message) {
@@ -111,16 +116,5 @@ public class ReelsBot implements LongPollingUpdateConsumer {
 
     private String withScheme(String link) {
         return link.contains("://") ? link : "https://" + link;
-    }
-
-    private void defaultReply(Long chatId, String text) {
-        try {
-            telegramClient.execute(SendMessage.builder()
-                    .chatId(chatId)
-                    .text(text)
-                    .build());
-        } catch (TelegramApiException e) {
-            log.error("Failed to send reply to chat {}", chatId, e);
-        }
     }
 }
